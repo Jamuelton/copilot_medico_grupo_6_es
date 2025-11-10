@@ -11,11 +11,3 @@ services:
     ports:
       - "3001:3001"
     restart: unless-stopped
-
-  frontend:
-    build:
-      context: ./front/copmed-extension
-      dockerfile: Dockerfile
-    ports:
-      - "8080:80"
-    restart: unless-stopped
