@@ -19,6 +19,31 @@ import {
 
 const SERVER_URL = "http://localhost:3001";
 
+const storage = {
+  get: (keys: string[], callback: (result: any) => void) => {
+    if (typeof chrome !== "undefined" && chrome.storage?.local) {
+      chrome.storage.local.get(keys, callback);
+    } else {
+      const result: any = {};
+      keys.forEach((key) => {
+        result[key] = localStorage.getItem(key);
+      });
+      callback(result);
+    }
+  },
+
+  set: (items: Record<string, any>, callback?: () => void) => {
+    if (typeof chrome !== "undefined" && chrome.storage?.local) {
+      chrome.storage.local.set(items, callback);
+    } else {
+      Object.entries(items).forEach(([key, value]) => {
+        localStorage.setItem(key, String(value ?? ""));
+      });
+      if (callback) callback();
+    }
+  },
+};
+
 // --- Tipos ---
 type Message = {
   id: Key;
@@ -79,8 +104,14 @@ function App() {
 
   // --- Funções de Carregamento e Persistência ---
 
+
   const loadPatientDataFromStorage = useCallback(() => {
-    chrome.storage.local.get(
+    if (
+    typeof chrome !== "undefined" &&
+    chrome.storage &&
+    chrome.storage.local
+  ) {
+    storage.get(
       ["patientId", "patientName", "consultationId", "consultationTitle"],
       (result) => {
         if (result.patientId) {
@@ -91,7 +122,22 @@ function App() {
         }
       }
     );
-  }, []);
+  } else {
+    const savedPatientId = localStorage.getItem("patientId");
+    const savedPatientName = localStorage.getItem("patientName");
+    const savedConsultationId = localStorage.getItem("consultationId");
+    const savedConsultationTitle = localStorage.getItem("consultationTitle");
+
+    if (savedPatientId) {
+      setPatientId(savedPatientId);
+      setPatientName(savedPatientName);
+      setConsultationId(savedConsultationId);
+      setConsultationTitle(savedConsultationTitle);
+    }
+  }
+}, []);
+  
+
 
   const loadConsultationHistory = useCallback(
     async (pId: string, cId: string) => {
@@ -258,11 +304,11 @@ function App() {
 
           if (data.patient_id && data.patient_id !== patientId) {
             setPatientId(data.patient_id);
-            chrome.storage.local.set({ patientId: data.patient_id });
+            storage.set({ patientId: data.patient_id });
           }
           if (data.consultation_id && data.consultation_id !== consultationId) {
             setConsultationId(data.consultation_id);
-            chrome.storage.local.set({ consultationId: data.consultation_id });
+            storage.set({ consultationId: data.consultation_id });
           }
         } else {
           setMessages((prevMessages) => [
@@ -327,11 +373,11 @@ function App() {
 
           if (data.patient_id && data.patient_id !== patientId) {
             setPatientId(data.patient_id);
-            chrome.storage.local.set({ patientId: data.patient_id });
+            storage.set({ patientId: data.patient_id });
           }
           if (data.consultation_id && data.consultation_id !== consultationId) {
             setConsultationId(data.consultation_id);
-            chrome.storage.local.set({ consultationId: data.consultation_id });
+            storage.set({ consultationId: data.consultation_id });
           }
         } else {
           setMessages((prevMessages) => [
@@ -381,7 +427,7 @@ function App() {
         const newPName = data.patient_name;
         const newCId = data.first_consultation_id;
 
-        chrome.storage.local.set(
+        storage.set(
           {
             patientId: newPId,
             patientName: newPName,
@@ -465,7 +511,7 @@ function App() {
         }
 
         if (selectedConsultationToLoad) {
-          chrome.storage.local.set(
+          storage.set(
             {
               patientId: pId,
               patientName: pName,
@@ -527,7 +573,7 @@ function App() {
         return;
       }
       setIsLoading(true);
-      chrome.storage.local.set(
+      storage.set(
         { consultationId: cId, consultationTitle: cTitle },
         () => {
           setConsultationId(cId);
@@ -590,7 +636,7 @@ function App() {
         const newConsultId = data.consultation_id;
         const newConsultTitle = data.consultation_title;
 
-        chrome.storage.local.set(
+        storage.set(
           {
             consultationId: newConsultId,
             consultationTitle: newConsultTitle,

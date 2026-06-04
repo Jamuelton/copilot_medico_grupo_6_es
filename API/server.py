@@ -3,6 +3,8 @@ import os
 import json
 import uuid
 from datetime import datetime
+from backend.user_db import get_user
+
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
@@ -499,8 +501,51 @@ def handle_recommendations():
         return jsonify({"error": f"Erro interno do servidor: {str(e)}"}), 500
 
 
+@app.route('/api/login', methods=['POST'])
+def login():
+    data = request.get_json()
+
+    if not data:
+        return jsonify({
+            "status": "error",
+            "message": "Corpo da requisição vazio."
+        }), 400
+
+    email = data.get("email")
+    password = data.get("password")
+
+    if not email or not password:
+        return jsonify({
+            "status": "error",
+            "message": "Email e senha são obrigatórios."
+        }), 400
+
+    user = get_user(email)
+
+    if not user:
+        return jsonify({
+            "status": "error",
+            "message": "Usuário não encontrado."
+        }), 404
+
+    if user.get("password") != password:
+        return jsonify({
+            "status": "error",
+            "message": "Senha inválida."
+        }), 401
+
+    return jsonify({
+        "status": "success",
+        "message": "Login realizado com sucesso.",
+        "user": {
+            "name": user.get("name"),
+            "email": email,
+            "role": user.get("role")
+        }
+    }), 200
 
 if __name__ == '__main__':
+
     print("Servidor Flask com Gemini e DB de Paciente iniciado.")
     
     # GARANTA que a função add_consultation_to_patient no patient_db.py tem a assinatura:
@@ -579,4 +624,9 @@ if __name__ == '__main__':
     )
     # --- FIM DA PRÉ-POPULAÇÃO DE DADOS CORRIGIDA ---
 
+
+
     app.run(host='0.0.0.0', port=3001, debug=True)
+
+
+    
