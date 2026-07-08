@@ -4,7 +4,7 @@ import json
 import uuid
 from datetime import datetime
 
-from flask import Flask, request, jsonify
+from flask import Flask, g, request, jsonify
 from flask_cors import CORS
 import tempfile
 import speech_recognition as sr
@@ -13,6 +13,19 @@ import speech_recognition as sr
 from backend import gemini_connection
 from backend import pdf_reader
 from backend import text_filter
+from backend.auth_decorators import token_required
+from backend.auth_service import (
+    AuthError,
+    authenticate_user,
+    create_access_token,
+    get_profile_details,
+    is_valid_email,
+    normalize_email,
+    normalize_profile,
+    normalize_profiles,
+    sanitize_user,
+)
+from backend.config import settings
 
 # Importa TODAS as funções do seu patient_db.py
 from backend.patient_db import (
@@ -24,8 +37,22 @@ from backend.patient_db import (
     )
 from backend.processador_voz.processador_voz import TranscritorVoz
 from backend.audio_service import Diarizador
+
+
+def get_cors_origins():
+    configured_origins = settings.cors_origins.strip()
+    if not configured_origins or configured_origins == "*":
+        return "*"
+    return [origin.strip() for origin in configured_origins.split(",") if origin.strip()]
+
+
 app = Flask(__name__)
-CORS(app)
+CORS(
+    app,
+    resources={r"/api/*": {"origins": get_cors_origins()}},
+    allow_headers=["Content-Type", "Authorization"],
+    methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+)
 
 audio_processor = None
 
@@ -52,6 +79,98 @@ except Exception as e:
     print(f"⚠️ AVISO: Falha ao carregar Diarizador: {e}")
     print("   -> O sistema funcionará apenas com Transcrição Simples.")
     audio_processor = None
+
+
+def _json_error(message, status_code):
+    return jsonify({"status": "error", "message": message}), status_code
+
+
+def _auth_success_response(user, profile, token, expires_in):
+    return jsonify({
+        "status": "success",
+        "token": token,
+        "token_type": "Bearer",
+        "expires_in": expires_in,
+        "user": sanitize_user(user),
+        "profile": get_profile_details(profile),
+        "available_profiles": [
+            get_profile_details(user_profile)
+            for user_profile in normalize_profiles(user.get("profiles"))
+        ],
+    }), 200
+
+
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return _json_error("Corpo JSON invalido.", 400)
+
+    email = normalize_email(data.get("email"))
+    password = data.get("password")
+
+    if not email or password is None:
+        return _json_error("Email e senha sao obrigatorios.", 400)
+    if not is_valid_email(email):
+        return _json_error("Email invalido.", 400)
+    if not isinstance(password, str) or not password:
+        return _json_error("Senha obrigatoria.", 400)
+
+    user = authenticate_user(email, password)
+    if not user:
+        return _json_error("Email ou senha invalidos", 401)
+
+    profiles = normalize_profiles(user.get("profiles"))
+    if not profiles:
+        return _json_error("Usuario sem perfil de acesso.", 403)
+
+    requested_profile = normalize_profile(data.get("profile"))
+    selected_profile = requested_profile if requested_profile else profiles[0]
+    if selected_profile not in profiles:
+        return _json_error("Perfil nao permitido para este usuario.", 403)
+
+    try:
+        token, expires_in = create_access_token(user, selected_profile)
+    except AuthError as exc:
+        return _json_error(exc.message, exc.status_code)
+
+    return _auth_success_response(user, selected_profile, token, expires_in)
+
+
+@app.route('/api/auth/select-profile', methods=['POST'])
+@token_required
+def select_profile():
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return _json_error("Corpo JSON invalido.", 400)
+
+    selected_profile = normalize_profile(data.get("profile"))
+    if not selected_profile:
+        return _json_error("Perfil e obrigatorio.", 400)
+    if selected_profile not in normalize_profiles(g.current_user.get("profiles")):
+        return _json_error("Perfil nao permitido para este usuario.", 403)
+
+    try:
+        token, expires_in = create_access_token(g.current_user, selected_profile)
+    except AuthError as exc:
+        return _json_error(exc.message, exc.status_code)
+
+    return _auth_success_response(g.current_user, selected_profile, token, expires_in)
+
+
+@app.route('/api/auth/me', methods=['GET'])
+@token_required
+def get_authenticated_user():
+    profile = getattr(g, "current_profile", "")
+    return jsonify({
+        "status": "success",
+        "user": getattr(g, "current_user_safe", {}),
+        "profile": get_profile_details(profile),
+        "available_profiles": [
+            get_profile_details(user_profile)
+            for user_profile in normalize_profiles(g.current_user.get("profiles"))
+        ],
+    }), 200
 
 
 @app.route('/api/transcribe_audio', methods=['POST'])

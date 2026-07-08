@@ -2,6 +2,47 @@
 
 **Co-pilot Médico**
 
+## Arquitetura integrada planejada
+
+Este repositório é o repositório oficial de trabalho do Copilot Médico. A integração planejada deve manter a extensão Chrome existente e adicionar, em uma etapa futura, a aplicação web React ao mesmo repositório, usando um backend Flask compartilhado.
+
+Estrutura alvo:
+
+```textS
+copilot_medico_grupo_2_es/
+├── API/
+│   └── backend Flask compartilhado
+├── front/
+│   ├── copmed-extension/
+│   │   └── extensão Chrome existente
+│   └── copmed-web/
+│       └── futura aplicação web React
+├── docker-compose.yml
+└── README.md
+```
+
+Separação dos módulos:
+
+- `API/`: backend Flask compartilhado. Deve concentrar as rotas e serviços usados tanto pela extensão Chrome quanto pela futura aplicação web.
+- `front/copmed-extension/`: frontend da extensão Chrome atual. Esta estrutura deve ser preservada durante a integração.
+- `front/copmed-web/`: local planejado para a aplicação web React. Esta pasta ainda não foi criada nesta etapa.
+- `docker-compose.yml`: orquestração local do projeto. Atualmente contempla backend e extensão; poderá receber o serviço web quando a aplicação React for integrada.
+
+A extensão Chrome e a futura aplicação web devem consumir o mesmo backend em `API/`, evitando duplicação de regras de negócio e mantendo um ponto único para integrações com IA, dados de pacientes, processamento de PDFs e áudio.
+
+### Repositório de referência
+
+O repositório `italobaracho/copilot-medico-atualizado` foi analisado apenas como referência. Ele possui uma aplicação web React/Vite no nível raiz, além de melhorias de backend em `API/`.
+
+Partes que podem ser avaliadas para reaproveitamento futuro:
+
+- frontend web React/Vite: `src/`, `public/`, `package.json`, `vite.config.js` e componentes como telas de login, home, pacientes, atendimentos, análise de IA e agendamentos;
+- camada de comunicação web com a API: arquivo `src/api.js`;
+- estilos, tema e assets da interface web: `src/App.css`, `src/index.css`, `src/theme.js` e `src/assets/`;
+- melhorias de backend a serem comparadas com cuidado antes de qualquer merge: autenticação, agendamentos, dependências extras e ajustes de `docker-compose.yml`.
+
+Nenhum arquivo do repositório de referência foi copiado nesta etapa. A integração funcional, a criação da aplicação web dentro de `front/copmed-web/`, alterações no backend e ajustes na extensão devem ser tratados em tasks futuras.
+
 ## Requisitos
 
 ### Backend

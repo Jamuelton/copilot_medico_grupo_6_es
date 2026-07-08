@@ -3,6 +3,7 @@ google-generativeai
 spacy
 PyPDF2
 Flask-Cors
+pydantic-settings
 python-dotenv
 SpeechRecognition
 numpy
